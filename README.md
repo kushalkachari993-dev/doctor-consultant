@@ -29,6 +29,7 @@ This is a demo project, not a production medical records system. Do not enter re
 
 ```text
 api/index.py        Python API endpoint mounted at /api
+api/send_email.py   Python API endpoint mounted at /api/send_email
 pages/index.tsx     Public landing page and sign-in entry point
 pages/product.tsx   Protected consultation assistant UI
 pages/_app.tsx      Clerk provider and global styles
@@ -77,7 +78,7 @@ npx vercel dev
 
 Open `http://localhost:3000`.
 
-Use `npm run dev` only when you want to run the frontend by itself. The AI and email endpoints are Python Vercel functions, so `/api` and `/api/send-email` require `vercel dev` locally.
+Use `npm run dev` only when you want to run the frontend by itself. The AI and email endpoints are Python Vercel functions, so `/api` and `/api/send_email` require `vercel dev` locally.
 
 ## Demo Flow
 

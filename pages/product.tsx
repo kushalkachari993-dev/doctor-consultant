@@ -144,7 +144,7 @@ function ConsultationForm() {
                 throw new Error('Authentication required.');
             }
 
-            const response = await fetch('/api/send-email', {
+            const response = await fetch('/api/send_email', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
