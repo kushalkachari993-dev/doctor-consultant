@@ -13,6 +13,7 @@ import jwt  # type: ignore
 from fastapi import Depends, FastAPI, HTTPException  # type: ignore
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer  # type: ignore
+from jwt import PyJWKClient  # type: ignore
 from pydantic import BaseModel, Field  # type: ignore
 
 app = FastAPI()
@@ -35,45 +36,27 @@ def assert_email(value: str):
 def verify_clerk_token(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
 ) -> dict[str, Any]:
-    clerk_secret_key = os.getenv("CLERK_SECRET_KEY")
-    if not clerk_secret_key:
-        raise HTTPException(status_code=500, detail="CLERK_SECRET_KEY is not configured")
+    jwks_url = os.getenv("CLERK_JWKS_URL")
+    if not jwks_url:
+        raise HTTPException(status_code=500, detail="CLERK_JWKS_URL is not configured")
 
     try:
+        jwk_client = PyJWKClient(jwks_url)
+        signing_key = jwk_client.get_signing_key_from_jwt(credentials.credentials)
         claims = jwt.decode(
             credentials.credentials,
-            options={"verify_signature": False, "verify_exp": False},
+            signing_key.key,
+            algorithms=["RS256"],
+            options={"verify_aud": False},
         )
     except Exception:
         raise HTTPException(
             status_code=401,
-            detail="Authentication token could not be read. Please sign out and sign in again.",
+            detail="Authentication failed. Please sign out and sign in again.",
         )
 
-    session_id = claims.get("sid")
-    user_id = claims.get("sub")
-    if not session_id or not user_id:
-        raise HTTPException(status_code=401, detail="Invalid Clerk session token")
-
-    request = Request(
-        f"https://api.clerk.com/v1/sessions/{session_id}",
-        headers={"Authorization": f"Bearer {clerk_secret_key}"},
-        method="GET",
-    )
-
-    try:
-        with urlopen(request, timeout=15) as response:
-            session = json.loads(response.read().decode("utf-8"))
-    except HTTPError:
-        raise HTTPException(
-            status_code=401,
-            detail="Clerk session is not active. Please sign in again.",
-        )
-    except URLError:
-        raise HTTPException(status_code=502, detail="Could not verify Clerk session")
-
-    if session.get("status") != "active" or session.get("user_id") != user_id:
-        raise HTTPException(status_code=401, detail="Clerk session is not active")
+    if not claims.get("sub"):
+        raise HTTPException(status_code=401, detail="Invalid Clerk token")
 
     return claims
 
