@@ -12,6 +12,8 @@ This is a demo project, not a production medical records system. Do not enter re
 - Python FastAPI endpoint designed for Vercel serverless deployment
 - Clerk JWT verification on the API route
 - Streaming OpenAI response rendered as Markdown
+- Review-and-confirm email sending through Resend
+- Local JSONL audit records for sent emails
 
 ## Tech Stack
 
@@ -45,9 +47,13 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
 CLERK_SECRET_KEY=
 CLERK_JWKS_URL=
 OPENAI_API_KEY=
+RESEND_API_KEY=
+AUDIT_LOG_PATH=audit/email_sends.jsonl
 ```
 
 Clerk must also have a plan named `premium_subscription`, because `pages/product.tsx` uses that plan id for access control.
+
+The email sender is taken from the signed-in doctor's primary Clerk email address. For Resend, that sender address must belong to a verified sender/domain in your Resend account, otherwise Resend will reject the send.
 
 ## Local Development
 
@@ -63,13 +69,15 @@ Install Python dependencies:
 pip install -r requirements.txt
 ```
 
-Start the app:
+Start the full local app with Vercel's dev server:
 
 ```bash
-npm run dev
+npx vercel dev
 ```
 
 Open `http://localhost:3000`.
+
+Use `npm run dev` only when you want to run the frontend by itself. The AI and email endpoints are Python Vercel functions, so `/api` and `/api/send-email` require `vercel dev` locally.
 
 ## Demo Flow
 
@@ -79,6 +87,10 @@ Open `http://localhost:3000`.
 4. Subscribe or use a Clerk test user with access to `premium_subscription`.
 5. Enter consultation notes.
 6. Submit the form and watch the AI response stream into the page.
+7. Review the generated patient email draft.
+8. Click `Send Email` and confirm the send.
+
+Sent email metadata is appended to `audit/email_sends.jsonl`. The audit record stores the doctor user id, doctor email, patient name/email, timestamp, provider message id, and a hash-based generated content version. It does not store the full generated email body.
 
 ## Deployment Notes
 

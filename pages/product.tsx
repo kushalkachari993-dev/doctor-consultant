@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, FormEvent } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useAuth, useUser } from '@clerk/nextjs';
 import DatePicker from 'react-datepicker';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -14,18 +14,52 @@ type StreamMessage = {
     error?: string;
 };
 
+type SendEmailResponse = {
+    audit_id: string;
+    content_version: string;
+    provider_message_id?: string;
+};
+
+async function responseErrorMessage(response: Response, fallback: string) {
+    const contentType = response.headers.get('content-type') ?? '';
+
+    if (contentType.includes('application/json')) {
+        const body = await response.json() as { detail?: string };
+        return body.detail ?? fallback;
+    }
+
+    return `${fallback} (${response.status} ${response.statusText})`;
+}
+
 function ConsultationForm() {
     const { getToken } = useAuth();
+    const { user } = useUser();
+    const doctorEmail = user?.primaryEmailAddress?.emailAddress ?? '';
 
     const [patientName, setPatientName] = useState('');
+    const [patientEmail, setPatientEmail] = useState('');
     const [visitDate, setVisitDate] = useState<Date | null>(new Date());
     const [notes, setNotes] = useState('');
     const [output, setOutput] = useState('');
     const [loading, setLoading] = useState(false);
+    const [sendStatus, setSendStatus] = useState('');
+    const [sendingEmail, setSendingEmail] = useState(false);
+
+    function patientEmailDraft() {
+        const heading = '### Draft of email to patient in patient-friendly language';
+        const headingIndex = output.indexOf(heading);
+
+        if (headingIndex === -1) {
+            return '';
+        }
+
+        return output.slice(headingIndex + heading.length).trim();
+    }
 
     async function handleSubmit(e: FormEvent) {
         e.preventDefault();
         setOutput('');
+        setSendStatus('');
         setLoading(true);
 
         const jwt = await getToken();
@@ -48,13 +82,15 @@ function ConsultationForm() {
                 },
                 body: JSON.stringify({
                     patient_name: patientName.trim(),
+                    patient_email: patientEmail.trim(),
                     date_of_visit: visitDate?.toISOString().slice(0, 10),
                     notes: notes.trim(),
                 }),
                 async onopen(response) {
                     if (!response.ok) {
-                        const message = await response.text();
-                        throw new Error(message || 'Unable to generate the consultation summary.');
+                        throw new Error(
+                            await responseErrorMessage(response, 'Unable to generate the consultation summary.')
+                        );
                     }
                 },
                 onmessage(ev) {
@@ -78,6 +114,65 @@ function ConsultationForm() {
         }
     }
 
+    async function handleSendEmail() {
+        const draft = patientEmailDraft();
+
+        if (!draft) {
+            setSendStatus('Generate a patient email draft before sending.');
+            return;
+        }
+
+        if (!doctorEmail) {
+            setSendStatus('Your signed-in account needs a primary email address before sending.');
+            return;
+        }
+
+        const confirmed = window.confirm(
+            `Send this reviewed email draft from ${doctorEmail} to ${patientEmail}? This action will be recorded in the audit log.`
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        setSendingEmail(true);
+        setSendStatus('');
+
+        try {
+            const jwt = await getToken();
+            if (!jwt) {
+                throw new Error('Authentication required.');
+            }
+
+            const response = await fetch('/api/send-email', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${jwt}`,
+                },
+                body: JSON.stringify({
+                    doctor_email: doctorEmail,
+                    patient_name: patientName.trim(),
+                    patient_email: patientEmail.trim(),
+                    email_body: draft,
+                    generated_content: output,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error(await responseErrorMessage(response, 'Unable to send the email.'));
+            }
+
+            const result = await response.json() as SendEmailResponse;
+            setSendStatus(`Email sent. Audit id: ${result.audit_id}. Version: ${result.content_version}.`);
+        } catch (err) {
+            console.error('Email send error:', err);
+            setSendStatus(err instanceof Error ? err.message : 'Unable to send the email.');
+        } finally {
+            setSendingEmail(false);
+        }
+    }
+
     return (
         <div className="container mx-auto px-4 py-12 max-w-3xl">
             <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-8">
@@ -97,6 +192,21 @@ function ConsultationForm() {
                         onChange={(e) => setPatientName(e.target.value)}
                         className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                         placeholder="Enter patient's full name"
+                    />
+                </div>
+
+                <div className="space-y-2">
+                    <label htmlFor="patient-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Recipient Email
+                    </label>
+                    <input
+                        id="patient-email"
+                        type="email"
+                        required
+                        value={patientEmail}
+                        onChange={(e) => setPatientEmail(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                        placeholder="Enter recipient email address"
                     />
                 </div>
 
@@ -145,6 +255,21 @@ function ConsultationForm() {
                         <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
                             {output}
                         </ReactMarkdown>
+                    </div>
+                    <div className="mt-8 border-t border-gray-200 pt-6 dark:border-gray-700">
+                        <button
+                            type="button"
+                            onClick={handleSendEmail}
+                            disabled={loading || sendingEmail || !patientEmailDraft() || !doctorEmail}
+                            className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
+                        >
+                            {sendingEmail ? 'Sending Email...' : 'Send Email'}
+                        </button>
+                        {sendStatus && (
+                            <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">
+                                {sendStatus}
+                            </p>
+                        )}
                     </div>
                 </section>
             )}
