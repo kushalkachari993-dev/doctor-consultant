@@ -91,7 +91,7 @@ Use `npm run dev` only when you want to run the frontend by itself. The AI and e
 7. Review the generated patient email draft.
 8. Click `Send Email` and confirm the send.
 
-Sent email metadata is appended to `audit/email_sends.jsonl`. The audit record stores the doctor user id, doctor email, patient name/email, timestamp, provider message id, and a hash-based generated content version. It does not store the full generated email body.
+Sent email metadata is appended to `audit/email_sends.jsonl` locally. On Vercel, relative audit paths are written under `/tmp`, which is suitable for demo diagnostics but not durable storage. The audit record stores the doctor user id, doctor email, patient name/email, timestamp, provider message id, and a hash-based generated content version. It does not store the full generated email body.
 
 ## Deployment Notes
 

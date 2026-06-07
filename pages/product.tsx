@@ -22,13 +22,18 @@ type SendEmailResponse = {
 
 async function responseErrorMessage(response: Response, fallback: string) {
     const contentType = response.headers.get('content-type') ?? '';
+    const status = `${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;
 
     if (contentType.includes('application/json')) {
-        const body = await response.json() as { detail?: string };
-        return body.detail ?? fallback;
+        const body = await response.json() as { detail?: string | unknown };
+        if (typeof body.detail === 'string') {
+            return body.detail;
+        }
+        return `${fallback} (${status})`;
     }
 
-    return `${fallback} (${response.status} ${response.statusText})`;
+    const body = await response.text();
+    return body ? `${fallback} (${status}): ${body.slice(0, 240)}` : `${fallback} (${status})`;
 }
 
 function ConsultationForm() {

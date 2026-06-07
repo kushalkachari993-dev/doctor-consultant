@@ -35,6 +35,15 @@ def assert_email(value: str):
         raise HTTPException(status_code=422, detail="A valid email is required")
 
 
+def audit_log_path() -> Path:
+    configured_path = Path(os.getenv("AUDIT_LOG_PATH", "audit/email_sends.jsonl"))
+
+    if os.getenv("VERCEL") and not configured_path.is_absolute():
+        return Path("/tmp") / configured_path
+
+    return configured_path
+
+
 @app.post("/api/send-email")
 @app.post("/api/send_email")
 def send_patient_email(
@@ -55,8 +64,7 @@ def send_patient_email(
     audit_id = str(uuid.uuid4())
     content_version = sha256(payload.generated_content.encode("utf-8")).hexdigest()[:12]
     timestamp = datetime.now(timezone.utc).isoformat()
-    audit_path = Path(os.getenv("AUDIT_LOG_PATH", "audit/email_sends.jsonl"))
-    audit_path.parent.mkdir(exist_ok=True)
+    audit_path = audit_log_path()
 
     resend_payload = {
         "from": payload.doctor_email,
@@ -96,13 +104,19 @@ def send_patient_email(
         "provider_message_id": provider_response.get("id"),
     }
 
-    with audit_path.open("a", encoding="utf-8") as audit_file:
-        audit_file.write(json.dumps(audit_record) + "\n")
+    audit_write_error = None
+    try:
+        audit_path.parent.mkdir(parents=True, exist_ok=True)
+        with audit_path.open("a", encoding="utf-8") as audit_file:
+            audit_file.write(json.dumps(audit_record) + "\n")
+    except OSError as err:
+        audit_write_error = str(err)
 
     return JSONResponse(
         {
             "audit_id": audit_id,
             "content_version": content_version,
             "provider_message_id": provider_response.get("id"),
+            "audit_write_error": audit_write_error,
         }
     )
