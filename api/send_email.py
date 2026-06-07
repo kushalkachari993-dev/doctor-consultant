@@ -5,19 +5,21 @@ import uuid
 from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
-from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-import jwt  # type: ignore
 from fastapi import Depends, FastAPI, HTTPException  # type: ignore
 from fastapi.responses import JSONResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer  # type: ignore
-from jwt import PyJWKClient  # type: ignore
+from fastapi_clerk_auth import (  # type: ignore
+    ClerkConfig,
+    ClerkHTTPBearer,
+    HTTPAuthorizationCredentials,
+)
 from pydantic import BaseModel, Field  # type: ignore
 
 app = FastAPI()
-bearer_scheme = HTTPBearer()
+clerk_config = ClerkConfig(jwks_url=os.getenv("CLERK_JWKS_URL"))
+clerk_guard = ClerkHTTPBearer(clerk_config)
 
 
 class SendEmailRequest(BaseModel):
@@ -33,34 +35,6 @@ def assert_email(value: str):
         raise HTTPException(status_code=422, detail="A valid email is required")
 
 
-def verify_clerk_token(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-) -> dict[str, Any]:
-    jwks_url = os.getenv("CLERK_JWKS_URL")
-    if not jwks_url:
-        raise HTTPException(status_code=500, detail="CLERK_JWKS_URL is not configured")
-
-    try:
-        jwk_client = PyJWKClient(jwks_url)
-        signing_key = jwk_client.get_signing_key_from_jwt(credentials.credentials)
-        claims = jwt.decode(
-            credentials.credentials,
-            signing_key.key,
-            algorithms=["RS256"],
-            options={"verify_aud": False},
-        )
-    except Exception:
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication failed. Please sign out and sign in again.",
-        )
-
-    if not claims.get("sub"):
-        raise HTTPException(status_code=401, detail="Invalid Clerk token")
-
-    return claims
-
-
 def audit_log_path() -> Path:
     configured_path = Path(os.getenv("AUDIT_LOG_PATH", "audit/email_sends.jsonl"))
 
@@ -74,7 +48,7 @@ def audit_log_path() -> Path:
 @app.post("/api/send_email")
 def send_patient_email(
     payload: SendEmailRequest,
-    claims: dict[str, Any] = Depends(verify_clerk_token),
+    creds: HTTPAuthorizationCredentials = Depends(clerk_guard),
 ):
     assert_email(payload.doctor_email)
     assert_email(payload.patient_email)
@@ -83,7 +57,10 @@ def send_patient_email(
     if not resend_api_key:
         raise HTTPException(status_code=500, detail="RESEND_API_KEY must be configured")
 
-    doctor_user_id = claims["sub"]
+    doctor_user_id = creds.decoded.get("sub")
+    if not doctor_user_id:
+        raise HTTPException(status_code=401, detail="Invalid Clerk token")
+
     audit_id = str(uuid.uuid4())
     content_version = sha256(payload.generated_content.encode("utf-8")).hexdigest()[:12]
     timestamp = datetime.now(timezone.utc).isoformat()

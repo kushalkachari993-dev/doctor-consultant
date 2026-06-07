@@ -1,5 +1,5 @@
 fastapi
 uvicorn
 openai
-PyJWT[crypto]
+fastapi-clerk-auth
 pydantic

@@ -46,8 +46,6 @@ function ConsultationForm() {
     const [visitDate, setVisitDate] = useState<Date | null>(new Date());
     const [notes, setNotes] = useState('');
     const [output, setOutput] = useState('');
-    const [generationError, setGenerationError] = useState('');
-    const [hasGeneratedDraft, setHasGeneratedDraft] = useState(false);
     const [loading, setLoading] = useState(false);
     const [sendStatus, setSendStatus] = useState('');
     const [sendingEmail, setSendingEmail] = useState(false);
@@ -66,8 +64,6 @@ function ConsultationForm() {
     async function handleSubmit(e: FormEvent) {
         e.preventDefault();
         setOutput('');
-        setGenerationError('');
-        setHasGeneratedDraft(false);
         setSendStatus('');
         setLoading(true);
 
@@ -80,7 +76,6 @@ function ConsultationForm() {
 
         const controller = new AbortController();
         let buffer = '';
-        let succeeded = false;
 
         try {
             await fetchEventSource('/api', {
@@ -115,26 +110,13 @@ function ConsultationForm() {
                     throw err;
                 },
             });
-            succeeded = Boolean(buffer.trim()) && Boolean(patientEmailDraftFrom(buffer));
         } catch (err) {
             console.error('SSE error:', err);
             controller.abort();
-            setGenerationError(err instanceof Error ? err.message : 'Unable to generate the consultation summary.');
+            setOutput(err instanceof Error ? err.message : 'Unable to generate the consultation summary.');
         } finally {
-            setHasGeneratedDraft(succeeded);
             setLoading(false);
         }
-    }
-
-    function patientEmailDraftFrom(content: string) {
-        const heading = '### Draft of email to patient in patient-friendly language';
-        const headingIndex = content.indexOf(heading);
-
-        if (headingIndex === -1) {
-            return '';
-        }
-
-        return content.slice(headingIndex + heading.length).trim();
     }
 
     async function handleSendEmail() {
@@ -272,14 +254,6 @@ function ConsultationForm() {
                 </button>
             </form>
 
-            {generationError && (
-                <section className="mt-8 bg-red-50 dark:bg-red-950/40 rounded-xl shadow-lg p-8">
-                    <p className="text-red-700 dark:text-red-200">
-                        {generationError}
-                    </p>
-                </section>
-            )}
-
             {output && (
                 <section className="mt-8 bg-gray-50 dark:bg-gray-800 rounded-xl shadow-lg p-8">
                     <div className="markdown-content prose prose-blue dark:prose-invert max-w-none">
@@ -291,7 +265,7 @@ function ConsultationForm() {
                         <button
                             type="button"
                             onClick={handleSendEmail}
-                            disabled={loading || sendingEmail || !hasGeneratedDraft || !patientEmailDraft() || !doctorEmail}
+                            disabled={loading || sendingEmail || !patientEmailDraft() || !doctorEmail}
                             className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
                         >
                             {sendingEmail ? 'Sending Email...' : 'Send Email'}
