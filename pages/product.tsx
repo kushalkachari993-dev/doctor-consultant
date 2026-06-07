@@ -14,12 +14,6 @@ type StreamMessage = {
     error?: string;
 };
 
-type SendEmailResponse = {
-    audit_id: string;
-    content_version: string;
-    provider_message_id?: string;
-};
-
 async function responseErrorMessage(response: Response, fallback: string) {
     const contentType = response.headers.get('content-type') ?? '';
     const status = `${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;
@@ -48,7 +42,6 @@ function ConsultationForm() {
     const [output, setOutput] = useState('');
     const [loading, setLoading] = useState(false);
     const [sendStatus, setSendStatus] = useState('');
-    const [sendingEmail, setSendingEmail] = useState(false);
 
     function patientEmailDraft() {
         const heading = '### Draft of email to patient in patient-friendly language';
@@ -119,7 +112,7 @@ function ConsultationForm() {
         }
     }
 
-    async function handleSendEmail() {
+    function handleOpenEmailDraft() {
         const draft = patientEmailDraft();
 
         if (!draft) {
@@ -133,49 +126,19 @@ function ConsultationForm() {
         }
 
         const confirmed = window.confirm(
-            `Send this reviewed email draft from ${doctorEmail} to ${patientEmail}? This action will be recorded in the audit log.`
+            `Open an email draft from your mail app to ${patientEmail}? You will review and send it yourself.`
         );
 
         if (!confirmed) {
             return;
         }
 
-        setSendingEmail(true);
-        setSendStatus('');
+        const subject = 'Follow-up from your consultation';
+        const body = `${draft}\n\nSent from: ${doctorEmail}`;
+        const mailto = `mailto:${encodeURIComponent(patientEmail.trim())}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
-        try {
-            const jwt = await getToken();
-            if (!jwt) {
-                throw new Error('Authentication required.');
-            }
-
-            const response = await fetch('/api/send_email', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${jwt}`,
-                },
-                body: JSON.stringify({
-                    doctor_email: doctorEmail,
-                    patient_name: patientName.trim(),
-                    patient_email: patientEmail.trim(),
-                    email_body: draft,
-                    generated_content: output,
-                }),
-            });
-
-            if (!response.ok) {
-                throw new Error(await responseErrorMessage(response, 'Unable to send the email.'));
-            }
-
-            const result = await response.json() as SendEmailResponse;
-            setSendStatus(`Email sent. Audit id: ${result.audit_id}. Version: ${result.content_version}.`);
-        } catch (err) {
-            console.error('Email send error:', err);
-            setSendStatus(err instanceof Error ? err.message : 'Unable to send the email.');
-        } finally {
-            setSendingEmail(false);
-        }
+        window.location.href = mailto;
+        setSendStatus('Email draft opened in your mail app. Review it there before sending.');
     }
 
     return (
@@ -264,11 +227,11 @@ function ConsultationForm() {
                     <div className="mt-8 border-t border-gray-200 pt-6 dark:border-gray-700">
                         <button
                             type="button"
-                            onClick={handleSendEmail}
-                            disabled={loading || sendingEmail || !patientEmailDraft() || !doctorEmail}
+                            onClick={handleOpenEmailDraft}
+                            disabled={loading || !patientEmailDraft() || !doctorEmail}
                             className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
                         >
-                            {sendingEmail ? 'Sending Email...' : 'Send Email'}
+                            Open Email Draft
                         </button>
                         {sendStatus && (
                             <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">

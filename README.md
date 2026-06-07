@@ -12,8 +12,7 @@ This is a demo project, not a production medical records system. Do not enter re
 - Python FastAPI endpoint designed for Vercel serverless deployment
 - Clerk JWT verification on the API route
 - Streaming OpenAI response rendered as Markdown
-- Review-and-confirm email sending through Resend
-- Local JSONL audit records for sent emails
+- Mail app draft creation for reviewed patient emails
 
 ## Tech Stack
 
@@ -29,7 +28,6 @@ This is a demo project, not a production medical records system. Do not enter re
 
 ```text
 api/index.py        Python API endpoint mounted at /api
-api/send_email.py   Python API endpoint mounted at /api/send_email
 pages/index.tsx     Public landing page and sign-in entry point
 pages/product.tsx   Protected consultation assistant UI
 pages/_app.tsx      Clerk provider and global styles
@@ -48,13 +46,11 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
 CLERK_SECRET_KEY=
 CLERK_JWKS_URL=
 OPENAI_API_KEY=
-RESEND_API_KEY=
-AUDIT_LOG_PATH=audit/email_sends.jsonl
 ```
 
 Clerk must also have a plan named `premium_subscription`, because `pages/product.tsx` uses that plan id for access control.
 
-The email sender is taken from the signed-in doctor's primary Clerk email address. For Resend, that sender address must belong to a verified sender/domain in your Resend account, otherwise Resend will reject the send.
+Patient email drafts open in the doctor's default mail app using a `mailto:` link. No email provider API key is required.
 
 ## Local Development
 
@@ -78,7 +74,7 @@ npx vercel dev
 
 Open `http://localhost:3000`.
 
-Use `npm run dev` only when you want to run the frontend by itself. The AI and email endpoints are Python Vercel functions, so `/api` and `/api/send_email` require `vercel dev` locally.
+Use `npm run dev` only when you want to run the frontend by itself. The AI endpoint is a Python Vercel function, so `/api` requires `vercel dev` locally.
 
 ## Demo Flow
 
@@ -89,9 +85,8 @@ Use `npm run dev` only when you want to run the frontend by itself. The AI and e
 5. Enter consultation notes.
 6. Submit the form and watch the AI response stream into the page.
 7. Review the generated patient email draft.
-8. Click `Send Email` and confirm the send.
-
-Sent email metadata is appended to `audit/email_sends.jsonl` locally. On Vercel, relative audit paths are written under `/tmp`, which is suitable for demo diagnostics but not durable storage. The audit record stores the doctor user id, doctor email, patient name/email, timestamp, provider message id, and a hash-based generated content version. It does not store the full generated email body.
+8. Click `Open Email Draft`.
+9. Review and send the email from the doctor's mail app.
 
 ## Deployment Notes
 
