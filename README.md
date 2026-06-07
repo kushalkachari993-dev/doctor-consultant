@@ -1,40 +1,87 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/pages/api-reference/create-next-app).
+# MediNotes Pro
 
-## Getting Started
+MediNotes Pro is a demo SaaS application for healthcare consultation note workflows. It lets a signed-in user enter visit notes, then streams an AI-generated doctor summary, follow-up actions, and a patient-friendly email draft.
 
-First, run the development server:
+This is a demo project, not a production medical records system. Do not enter real patient data unless the full deployment, vendor agreements, retention policy, and compliance controls have been reviewed.
+
+## Features
+
+- Next.js pages-router frontend with Tailwind CSS styling
+- Clerk authentication and premium subscription gating
+- Consultation form with patient name, visit date, and notes
+- Python FastAPI endpoint designed for Vercel serverless deployment
+- Clerk JWT verification on the API route
+- Streaming OpenAI response rendered as Markdown
+
+## Tech Stack
+
+- Next.js 16
+- React 19
+- TypeScript
+- Tailwind CSS 4
+- Clerk
+- FastAPI
+- OpenAI Python SDK
+
+## Project Structure
+
+```text
+api/index.py        Python API endpoint mounted at /api
+pages/index.tsx     Public landing page and sign-in entry point
+pages/product.tsx   Protected consultation assistant UI
+pages/_app.tsx      Clerk provider and global styles
+styles/globals.css  Tailwind import and Markdown output styling
+requirements.txt    Python dependencies for the API function
+```
+
+## Environment Variables
+
+Create a local `.env.local` file using `.env.example` as a guide.
+
+Required values:
+
+```text
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+CLERK_SECRET_KEY=
+CLERK_JWKS_URL=
+OPENAI_API_KEY=
+```
+
+Clerk must also have a plan named `premium_subscription`, because `pages/product.tsx` uses that plan id for access control.
+
+## Local Development
+
+Install JavaScript dependencies:
+
+```bash
+npm install
+```
+
+Install Python dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Start the app:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
+## Demo Flow
 
-[API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.ts`.
+1. Visit the landing page.
+2. Sign in with Clerk.
+3. Open the product page.
+4. Subscribe or use a Clerk test user with access to `premium_subscription`.
+5. Enter consultation notes.
+6. Submit the form and watch the AI response stream into the page.
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) instead of React pages.
+## Deployment Notes
 
-This project uses [`next/font`](https://nextjs.org/docs/pages/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The `api/index.py` file is structured for Vercel's Python serverless runtime. Configure the same environment variables in Vercel before deploying.
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn-pages-router) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/pages/building-your-application/deploying) for more details.
+For a public demo, rotate any local secrets that may have been exposed during development and keep `.env.local` uncommitted.
