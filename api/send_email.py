@@ -35,6 +35,7 @@ def assert_email(value: str):
         raise HTTPException(status_code=422, detail="A valid email is required")
 
 
+@app.post("/api/send-email")
 @app.post("/api/send_email")
 def send_patient_email(
     payload: SendEmailRequest,
